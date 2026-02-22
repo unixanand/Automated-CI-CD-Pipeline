@@ -1,0 +1,37 @@
+jenkins:
+  systemMessage: "Jenkins fully automated"
+
+  numExecutors: 2
+
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: admin
+          password: admin123
+
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+
+  # Disable CLI over remoting (security best practice)
+  remotingSecurity:
+    enabled: true
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - string:
+              scope: GLOBAL
+              id: AWS_ACCOUNT_ID
+              secret: "691593026559"
+              description: "AWS account for ECR"
+
+unclassified:
+  location:
+    url: "${JENKINS_URL}"
+
+# THIS loads the pipeline automatically
+jobs:
+  - file: /var/lib/jenkins/job.groovy

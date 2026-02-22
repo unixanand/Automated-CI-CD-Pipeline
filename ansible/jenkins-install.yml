@@ -1,0 +1,129 @@
+---
+- name: Configure fully automated Jenkins with GitHub webhook
+  hosts: jenkins
+  become: yes
+
+  vars:
+    jenkins_home: /var/lib/jenkins
+    github_repo_owner: unixanand
+    github_repo_name: restaurant-app-stcloud
+    github_token: "{{ lookup('env', 'GITHUB_TOKEN') }}"
+    ec2_public_ip: "{{ ansible_host }}"
+
+  tasks:
+
+    # -----------------------------
+    # Install minimal required packages
+    # -----------------------------
+    - name: Install required packages
+      apt:
+        name:
+          - git
+          - unzip
+        update_cache: yes
+        state: present
+
+    # -----------------------------
+    # Ensure Jenkins user can use Docker
+    # -----------------------------
+    - name: Add Jenkins to docker group
+      user:
+        name: jenkins
+        groups: docker
+        append: yes
+
+    # -----------------------------
+    # Disable Jenkins setup wizard safely
+    # -----------------------------
+    - name: Disable Jenkins setup wizard
+      lineinfile:
+        path: /etc/default/jenkins
+        line: 'JAVA_ARGS="-Djenkins.install.runSetupWizard=false"'
+        create: yes
+
+    # -----------------------------
+    # Install Jenkins plugins
+    # -----------------------------
+    - name: Create plugins directory
+      file:
+        path: "{{ jenkins_home }}/plugins"
+        state: directory
+        owner: jenkins
+        group: jenkins
+        mode: "0755"
+
+    - name: Copy plugins list
+      copy:
+        src: files/plugins.txt
+        dest: /tmp/plugins.txt
+
+    - name: Install plugins
+      shell: jenkins-plugin-cli --plugin-file /tmp/plugins.txt
+      environment:
+        JENKINS_HOME: "{{ jenkins_home }}"
+
+    # -----------------------------
+    # Apply Jenkins Configuration as Code (JCasC)
+    # -----------------------------
+    - name: Create JCasC directory
+      file:
+        path: "{{ jenkins_home }}/casc_configs"
+        state: directory
+        owner: jenkins
+        group: jenkins
+        mode: "0755"
+
+    - name: Copy JCasC config
+      copy:
+        src: files/jenkins.yaml
+        dest: "{{ jenkins_home }}/casc_configs/jenkins.yaml"
+        owner: jenkins
+        group: jenkins
+
+    - name: Enable JCasC
+      lineinfile:
+        path: /etc/default/jenkins
+        line: 'CASC_JENKINS_CONFIG={{ jenkins_home }}/casc_configs'
+        create: yes
+
+    # -----------------------------
+    # Restart Jenkins after configuration
+    # -----------------------------
+    - name: Restart Jenkins
+      systemd:
+        name: jenkins
+        state: restarted
+        enabled: yes
+
+    # -----------------------------
+    # Wait for Jenkins to be ready
+    # -----------------------------
+    - name: Wait for Jenkins API
+      uri:
+        url: http://localhost:8080/login
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 30
+      delay: 10
+
+    # -----------------------------
+    # Automatically create GitHub webhook
+    # -----------------------------
+    - name: Create GitHub webhook
+      uri:
+        url: "https://api.github.com/repos/{{ github_repo_owner }}/{{ github_repo_name }}/hooks"
+        method: POST
+        headers:
+          Authorization: "token {{ github_token }}"
+          Accept: "application/vnd.github+json"
+        body_format: json
+        body:
+          name: web
+          active: true
+          events:
+            - push
+          config:
+            url: "http://{{ ec2_public_ip }}:8080/github-webhook/"
+            content_type: json
+        status_code: [201, 422]

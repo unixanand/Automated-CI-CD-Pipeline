@@ -1,0 +1,47 @@
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_NAME = "08474/kubernetes-app"
+        TAG = "${BUILD_NUMBER}"
+        DOCKER_CREDS = "dockerhub-creds"
+        KUBECONFIG = "/var/jenkins_home/.kube/config"
+    }
+
+    stages {
+
+        stage('Clone Repo') {
+            steps {
+                git branch: 'main', url: 'https://github.com/unixanand/Automated-CI-CD-Pipeline.git'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t $IMAGE_NAME:$TAG .'
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDS}", usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                    sh '''
+                      echo $PASS | docker login -u $USER --password-stdin
+                      docker push $IMAGE_NAME:$TAG
+                      docker logout
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh '''
+                  kubectl apply -f k8s/streamlit-deployment.yaml
+                  kubectl set image deployment/streamlit-app streamlit=$IMAGE_NAME:$TAG
+                  kubectl rollout status deployment/streamlit-app
+                '''
+            }
+        }
+    }
+}

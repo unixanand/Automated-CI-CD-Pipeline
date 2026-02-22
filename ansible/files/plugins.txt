@@ -1,0 +1,9 @@
+configuration-as-code
+github
+github-api
+git
+workflow-aggregator
+credentials-binding
+docker-workflow
+aws-credentials
+job-dsl

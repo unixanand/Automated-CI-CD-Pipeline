@@ -80,8 +80,11 @@ echo "Jenkins installed and started" >> /home/ubuntu/userdata.out
 # -----------------------------
 # Detect EC2 public IP and set JENKINS_URL
 # -----------------------------
+# Ensure Jenkins default config exists
+sudo touch /etc/default/jenkins
+
 PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
-echo "JENKINS_URL=http://$PUBLIC_IP:8080/" >> /etc/default/jenkins
+echo "JENKINS_URL=http://$PUBLIC_IP:8080/" | sudo tee /etc/default/jenkins
 echo "JENKINS_URL set with public IP: $PUBLIC_IP" >> /home/ubuntu/userdata.out
 
 # Restart Jenkins to pick up the new URL

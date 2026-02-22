@@ -1,3 +1,4 @@
-terraform/terraform.tfstate
-terraform/terraform.tfstate.backup
-terraform/.terraform/
+terraform/jenkins-ec2/terraform.tfstate
+terraform/jenkins-ec2/terraform.tfstate.backup
+terraform/jenkins-ec2/.terraform/
+terraform/jenkins-ec2/secret

@@ -4,7 +4,7 @@ pipeline {
     environment {
         IMAGE_NAME = "08474/kubernetes-app"
         TAG = "${BUILD_NUMBER}"
-        DOCKER_CREDS = "dockerhub-creds"
+        DOCKER_CREDS = "docker-hub-creds"
         KUBECONFIG = "/var/jenkins_home/.kube/config"
     }
 

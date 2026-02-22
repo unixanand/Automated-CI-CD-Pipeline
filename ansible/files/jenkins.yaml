@@ -22,11 +22,13 @@ credentials:
   system:
     domainCredentials:
       - credentials:
-          - string:
+
+          - usernamePassword:
               scope: GLOBAL
-              id: AWS_ACCOUNT_ID
-              secret: "691593026559"
-              description: "AWS account for ECR"
+              id: docker-hub-creds
+              username: "${DOCKERHUB_USER}"
+              password: "${DOCKERHUB_PASS}"
+              description: "Docker Hub login"
 
 unclassified:
   location:

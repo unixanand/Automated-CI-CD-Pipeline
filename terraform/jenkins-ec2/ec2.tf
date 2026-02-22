@@ -8,11 +8,11 @@ terraform {
 }
 
 provider "aws" {
-  region = "ap-south-1"   # change if needed
+  region = "ap-south-1"
 }
 
 # -------------------------
-# Get latest Ubuntu 20.04
+# Get latest Ubuntu 22.04
 # -------------------------
 data "aws_ami" "ubuntu" {
   most_recent = true
@@ -27,6 +27,13 @@ data "aws_ami" "ubuntu" {
     name   = "architecture"
     values = ["x86_64"]
   }
+}
+
+# -------------------------
+# Local secret file (GitHub-safe)
+# -------------------------
+data "local_file" "docker_secret" {
+  filename = "${path.module}/secret"  #  local secret file
 }
 
 # -------------------------
@@ -108,20 +115,36 @@ resource "aws_security_group" "k8s_sg" {
 # Jenkins EC2
 # -------------------------
 resource "aws_instance" "jenkins_server" {
-  ami                    = data.aws_ami.ubuntu.id
-  instance_type          = "t3.medium"
-  key_name               = "my-amazon-linux-key"
-  vpc_security_group_ids = [aws_security_group.k8s_sg.id]
+  ami                         = data.aws_ami.ubuntu.id
+  instance_type               = "t3.medium"
+  key_name                    = "my-amazon-linux-key"
+  vpc_security_group_ids      = [aws_security_group.k8s_sg.id]
   associate_public_ip_address = true
-  user_data = file("jenkins-install.sh")
-  
+
+  # Userdata: inject local secret into /etc/environment
+  user_data = <<-EOF
+              #!/bin/bash
+              set -e
+
+              # Update packages
+              apt update -y && apt upgrade -y
+
+              # Append local secret from Terraform
+              echo "${data.local_file.docker_secret.content}" >> /etc/environment
+              
+              # Continue with your existing jenkins-install.sh commands
+              ${file("jenkins-install.sh")}
+              EOF
 
   tags = {
     Name = "Jenkins-server"
-    Env = "Dev"
+    Env  = "Dev"
   }
 }
 
+# -------------------------
+# Dynamic Ansible inventory
+# -------------------------
 resource "local_file" "ansible_inventory" {
   content = <<EOT
 [devops]

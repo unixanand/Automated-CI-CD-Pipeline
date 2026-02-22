@@ -2,23 +2,32 @@
 set -e
 
 # -----------------------------
-# Update & install base packages
+# Force non-interactive installs
+# -----------------------------
+export DEBIAN_FRONTEND=noninteractive
+
+# -----------------------------
+# Update system packages
 # -----------------------------
 apt update -y
 apt upgrade -y
-apt install -y curl unzip openjdk-17-jdk docker.io
 
+# -----------------------------
+# Install dependencies: Java, curl, gnupg2, lsb-release, docker, unzip
+# -----------------------------
+apt install -y openjdk-17-jdk curl gnupg2 lsb-release docker.io unzip
+
+# Log installation
 touch /home/ubuntu/userdata.out
 chown ubuntu:ubuntu /home/ubuntu/userdata.out
-chmod 644 /home/ubuntu/userdata.out
+echo "Java, Docker, curl, gnupg2 installed" >> /home/ubuntu/userdata.out
 
-# -----------------------------
-# Docker setup
-# -----------------------------
+# Enable Docker
 systemctl enable docker
 systemctl start docker
 usermod -aG docker ubuntu
-echo "Docker + Java installed" >> /home/ubuntu/userdata.out
+
+echo "Docker enabled and ubuntu added to docker group" >> /home/ubuntu/userdata.out
 
 # -----------------------------
 # Install kubectl
@@ -26,68 +35,68 @@ echo "Docker + Java installed" >> /home/ubuntu/userdata.out
 curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
 chmod +x kubectl
 install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-ln -sf /usr/local/bin/kubectl /usr/bin/kubectl
+ln -sf /usr/local/bin/kubectl /usr/bin/kubectl || true
 rm kubectl
+
 echo "kubectl installed" >> /home/ubuntu/userdata.out
 
 # -----------------------------
-# Install K3s (single-node)
+# Install K3s (single node cluster)
 # -----------------------------
 curl -sfL https://get.k3s.io | sh -
 
-# Wait for K3s API to be ready
-until sudo k3s kubectl get nodes >/dev/null 2>&1; do
-    echo "Waiting for K3s to be ready..."
-    sleep 5
+# Wait for K3s node ready
+until kubectl get node >/dev/null 2>&1; do
+  sleep 5
 done
 
-# Setup kubeconfig for ubuntu
-sudo mkdir -p /home/ubuntu/.kube
-sudo cp /etc/rancher/k3s/k3s.yaml /home/ubuntu/.kube/config
-sudo chown ubuntu:ubuntu /home/ubuntu/.kube/config
-sudo chmod 600 /home/ubuntu/.kube/config
+# Configure .kube for ubuntu user
+mkdir -p /home/ubuntu/.kube
+cp /etc/rancher/k3s/k3s.yaml /home/ubuntu/.kube/config
+chown ubuntu:ubuntu /home/ubuntu/.kube/config
+chmod 600 /home/ubuntu/.kube/config
 
-# Setup kubeconfig for Jenkins
-sudo mkdir -p /var/lib/jenkins/.kube
-sudo cp /etc/rancher/k3s/k3s.yaml /var/lib/jenkins/.kube/config
-sudo chown -R jenkins:jenkins /var/lib/jenkins/.kube
-sudo chmod -R 600 /var/lib/jenkins/.kube
+# Configure .kube for Jenkins user (after Jenkins installation)
+mkdir -p /var/lib/jenkins/.kube
+cp /etc/rancher/k3s/k3s.yaml /var/lib/jenkins/.kube/config
+chown -R jenkins:jenkins /var/lib/jenkins/.kube
 
-echo "K3s ready" >> /home/ubuntu/userdata.out
+echo "K3s installed and .kube config ready for ubuntu and jenkins" >> /home/ubuntu/userdata.out
 
 # -----------------------------
 # Install Jenkins
 # -----------------------------
+# Add Jenkins repo key
 curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key | tee /usr/share/keyrings/jenkins-keyring.asc > /dev/null
+
+# Add Jenkins repository
 echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/" > /etc/apt/sources.list.d/jenkins.list
 
+# Update and install Jenkins
 apt update -y
 apt install -y jenkins
 
 # Disable setup wizard
-echo 'JAVA_ARGS="-Djenkins.install.runSetupWizard=false"' >> /etc/default/jenkins
+echo 'JAVA_ARGS="-Djenkins.install.runSetupWizard=false"' > /etc/default/jenkins
 
-# Add Jenkins to docker group
+# Add Jenkins user to docker group
 usermod -aG docker jenkins
 
-# Enable & start Jenkins
+# Enable and start Jenkins
 systemctl enable jenkins
 systemctl start jenkins
-systemctl restart jenkins
+systemctl status jenkins >> /home/ubuntu/userdata.out
 
-echo "Jenkins installed and started" >> /home/ubuntu/userdata.out
+echo "Jenkins installed and running" >> /home/ubuntu/userdata.out
 
 # -----------------------------
-# Detect EC2 public IP and set JENKINS_URL
+# Detect EC2 Public IP and set Jenkins URL
 # -----------------------------
-# Ensure Jenkins default config exists
-sudo touch /etc/default/jenkins
-
 PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
-echo "JENKINS_URL=http://$PUBLIC_IP:8080/" | sudo tee /etc/default/jenkins
-echo "JENKINS_URL set with public IP: $PUBLIC_IP" >> /home/ubuntu/userdata.out
+echo "JENKINS_URL=http://$PUBLIC_IP:8080/" >> /etc/default/jenkins
+echo "Public Jenkins URL: http://$PUBLIC_IP:8080/" >> /home/ubuntu/userdata.out
 
-# Restart Jenkins to pick up the new URL
+# Restart Jenkins to apply environment
 systemctl restart jenkins
 
-echo "Jenkins + K3s fully ready" >> /home/ubuntu/userdata.out
+echo "Userdata script completed successfully!" >> /home/ubuntu/userdata.out

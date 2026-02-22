@@ -122,3 +122,11 @@ resource "aws_instance" "jenkins_server" {
   }
 }
 
+resource "local_file" "ansible_inventory" {
+  content = <<EOT
+[devops]
+${aws_instance.jenkins_server.public_ip} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/my-amazon-linux-key.pem
+EOT
+
+  filename = "inventory.ini"
+}

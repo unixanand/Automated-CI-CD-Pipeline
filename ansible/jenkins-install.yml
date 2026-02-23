@@ -6,7 +6,7 @@
   vars:
     jenkins_home: /var/lib/jenkins
     github_repo_owner: unixanand
-    github_repo_name: restaurant-app-stcloud
+    github_repo_name: Automated-CI-CD-Pipeline
     github_token: "{{ lookup('env', 'GITHUB_TOKEN') }}"
     ec2_public_ip: "{{ ansible_host }}"
 

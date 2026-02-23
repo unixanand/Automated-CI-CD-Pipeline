@@ -10,6 +10,13 @@
     github_token: "{{ lookup('env', 'GITHUB_TOKEN') }}"
     ec2_public_ip: "{{ ansible_host }}"
 
+  handlers:
+    - name: restart jenkins
+      systemd:
+        name: jenkins
+        state: restarted
+        enabled: yes
+
   tasks:
 
     # -----------------------------
@@ -24,6 +31,14 @@
         state: present
 
     # -----------------------------
+    # Wait until Jenkins is initialized
+    # -----------------------------
+    - name: Wait for Jenkins home directory
+      wait_for:
+        path: "{{ jenkins_home }}"
+        timeout: 300
+
+    # -----------------------------
     # Ensure Jenkins user can use Docker
     # -----------------------------
     - name: Add Jenkins to docker group
@@ -31,36 +46,40 @@
         name: jenkins
         groups: docker
         append: yes
+      notify: restart jenkins
 
     # -----------------------------
-    # Disable Jenkins setup wizard safely
+    # Disable Jenkins setup wizard (correct systemd method)
     # -----------------------------
-    - name: Disable Jenkins setup wizard
-      lineinfile:
-        path: /etc/default/jenkins
-        line: 'JAVA_ARGS="-Djenkins.install.runSetupWizard=false"'
-        create: yes
-
-    # -----------------------------
-    # Install Jenkins plugins
-    # -----------------------------
-    - name: Create plugins directory
+    - name: Create systemd override directory
       file:
-        path: "{{ jenkins_home }}/plugins"
+        path: /etc/systemd/system/jenkins.service.d
         state: directory
-        owner: jenkins
-        group: jenkins
-        mode: "0755"
 
+    - name: Disable setup wizard
+      copy:
+        dest: /etc/systemd/system/jenkins.service.d/override.conf
+        content: |
+          [Service]
+          Environment="JAVA_ARGS=-Djenkins.install.runSetupWizard=false"
+      notify: restart jenkins
+
+    - name: Reload systemd daemon
+      command: systemctl daemon-reexec
+
+    # -----------------------------
+    # Install Jenkins plugins (including JCasC)
+    # -----------------------------
     - name: Copy plugins list
       copy:
         src: files/plugins.txt
         dest: /tmp/plugins.txt
 
-    - name: Install plugins
-      shell: jenkins-plugin-cli --plugin-file /tmp/plugins.txt
+    - name: Install Jenkins plugins
+      shell: /usr/bin/jenkins-plugin-cli --plugin-file /tmp/plugins.txt
       environment:
         JENKINS_HOME: "{{ jenkins_home }}"
+      notify: restart jenkins
 
     # -----------------------------
     # Apply Jenkins Configuration as Code (JCasC)
@@ -79,20 +98,27 @@
         dest: "{{ jenkins_home }}/casc_configs/jenkins.yaml"
         owner: jenkins
         group: jenkins
+        mode: "0644"
+      notify: restart jenkins
 
-    - name: Enable JCasC
-      lineinfile:
-        path: /etc/default/jenkins
-        line: 'CASC_JENKINS_CONFIG={{ jenkins_home }}/casc_configs'
-        create: yes
+    - name: Enable JCasC via systemd environment
+      copy:
+        dest: /etc/systemd/system/jenkins.service.d/casc.conf
+        content: |
+          [Service]
+          Environment="CASC_JENKINS_CONFIG={{ jenkins_home }}/casc_configs"
+      notify: restart jenkins
+
+    - name: Reload systemd after JCasC config
+      command: systemctl daemon-reexec
 
     # -----------------------------
-    # Restart Jenkins after configuration
+    # Ensure Jenkins running with config
     # -----------------------------
-    - name: Restart Jenkins
+    - name: Ensure Jenkins service started
       systemd:
         name: jenkins
-        state: restarted
+        state: started
         enabled: yes
 
     # -----------------------------

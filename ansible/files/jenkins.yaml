@@ -1,6 +1,5 @@
 jenkins:
   systemMessage: "Jenkins fully automated"
-
   numExecutors: 2
 
   securityRealm:
@@ -8,32 +7,34 @@ jenkins:
       allowsSignup: false
       users:
         - id: admin
+          name: Administrator
           password: admin123
 
   authorizationStrategy:
     loggedInUsersCanDoAnything:
       allowAnonymousRead: false
 
-  # Disable CLI over remoting (security best practice)
   remotingSecurity:
     enabled: true
 
-credentials:
-  system:
-    domainCredentials:
-      - credentials:
-
-          - usernamePassword:
-              scope: GLOBAL
-              id: docker-hub-creds
-              username: "${DOCKERHUB_USER}"
-              password: "${DOCKERHUB_PASS}"
-              description: "Docker Hub login"
+  crumbIssuer:
+    standard:
+      excludeClientIPFromCrumb: true
 
 unclassified:
   location:
     url: "${JENKINS_URL}"
 
-# THIS loads the pipeline automatically
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - usernamePassword:
+              scope: GLOBAL
+              id: docker-hub-creds
+              username: "${DOCKERHUB_USER}"
+              password: "${DOCKERHUB_PASS}"
+              description: Docker Hub login
+
 jobs:
   - file: /var/lib/jenkins/job.groovy

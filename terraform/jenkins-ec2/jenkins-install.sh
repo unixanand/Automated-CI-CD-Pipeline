@@ -1,28 +1,34 @@
 #!/bin/bash
 set -e
 
-# -----------------------------
-# Non-interactive install
-# -----------------------------
 export DEBIAN_FRONTEND=noninteractive
 
 # -----------------------------
-# Update system packages
+# System update
 # -----------------------------
 apt update -y
 apt upgrade -y
 
 # -----------------------------
-# Install dependencies: Java, curl, gnupg2, lsb-release, unzip, docker
+# Install base dependencies
 # -----------------------------
-apt install -y openjdk-17-jdk curl gnupg2 lsb-release docker.io unzip
+apt install -y \
+  openjdk-21-jre \
+  curl \
+  gnupg2 \
+  lsb-release \
+  docker.io \
+  unzip \
+  fontconfig \
+  wget
 
 # -----------------------------
 # Log file
 # -----------------------------
-touch /home/ubuntu/userdata.out
-chown ubuntu:ubuntu /home/ubuntu/userdata.out
-echo "Java, Docker, curl, gnupg2 installed" >> /home/ubuntu/userdata.out
+LOG_FILE="/home/ubuntu/userdata.out"
+touch $LOG_FILE
+chown ubuntu:ubuntu $LOG_FILE
+echo "Base packages installed" >> $LOG_FILE
 
 # -----------------------------
 # Enable Docker
@@ -30,7 +36,7 @@ echo "Java, Docker, curl, gnupg2 installed" >> /home/ubuntu/userdata.out
 systemctl enable docker
 systemctl start docker
 usermod -aG docker ubuntu
-echo "Docker enabled and ubuntu added to docker group" >> /home/ubuntu/userdata.out
+echo "Docker enabled" >> $LOG_FILE
 
 # -----------------------------
 # Install kubectl
@@ -40,51 +46,57 @@ chmod +x kubectl
 install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 ln -sf /usr/local/bin/kubectl /usr/bin/kubectl || true
 rm kubectl
-echo "kubectl installed" >> /home/ubuntu/userdata.out
+echo "kubectl installed" >> $LOG_FILE
 
 # -----------------------------
-# Install K3s (single node)
+# Install K3s
 # -----------------------------
 curl -sfL https://get.k3s.io | sh -
 
-# Wait for K3s node ready
 until kubectl get nodes >/dev/null 2>&1; do
   sleep 5
 done
 
-# Configure kubeconfig for ubuntu
 mkdir -p /home/ubuntu/.kube
 cp /etc/rancher/k3s/k3s.yaml /home/ubuntu/.kube/config
 chown ubuntu:ubuntu /home/ubuntu/.kube/config
 chmod 600 /home/ubuntu/.kube/config
+echo "K3s installed" >> $LOG_FILE
 
-echo "K3s installed and kubeconfig ready for ubuntu" >> /home/ubuntu/userdata.out
+# =====================================================
+# Install Jenkins (Official APT method)
+# =====================================================
+echo "Installing Jenkins..." >> $LOG_FILE
 
-# -----------------------------
-# Run Jenkins container
-# -----------------------------
-docker network create jenkins-net || true
+mkdir -p /etc/apt/keyrings
 
-docker run -d \
-  --name jenkins \
-  --network jenkins-net \
-  -p 8080:8080 \
-  -p 50000:50000 \
-  -v jenkins_home:/var/jenkins_home \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /home/ubuntu/.kube:/var/jenkins_home/.kube \
-  jenkins/jenkins:lts-jdk17
+wget -O /etc/apt/keyrings/jenkins-keyring.asc \
+  https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
 
-echo "Jenkins container started" >> /home/ubuntu/userdata.out
+echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc]" \
+  https://pkg.jenkins.io/debian-stable binary/ \
+  > /etc/apt/sources.list.d/jenkins.list
 
-# -----------------------------
-# Wait for Jenkins container to initialize
-# -----------------------------
+apt update -y
+apt install -y jenkins
+
+systemctl enable jenkins
+systemctl start jenkins
+
+echo "Jenkins installed and started" >> $LOG_FILE
+
+# Wait for Jenkins to initialize
 sleep 30
-docker logs jenkins | tail -n 20 >> /home/ubuntu/userdata.out
+
+echo "Jenkins initial admin password:" >> $LOG_FILE
+cat /var/lib/jenkins/secrets/initialAdminPassword >> $LOG_FILE
 
 # -----------------------------
-# Generate Ansible inventory
+# Open firewall port if UFW exists
 # -----------------------------
+ufw allow 8080 || true
 
-echo "Userdata completed successfully!" >> /home/ubuntu/userdata.out
+# -----------------------------
+# Done
+# -----------------------------
+echo "Userdata completed successfully!" >> $LOG_FILE

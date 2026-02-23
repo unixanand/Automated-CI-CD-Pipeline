@@ -1,5 +1,7 @@
 pipelineJob('restaurant-ci-cd') {
 
+    description('Automated CI/CD pipeline for restaurant application')
+
     properties {
         disableConcurrentBuilds()
     }
@@ -9,12 +11,13 @@ pipelineJob('restaurant-ci-cd') {
             scm {
                 git {
                     remote {
-                        url('https://https://github.com/unixanand/Automated-CI-CD-Pipeline.git')
+                        url('https://github.com/unixanand/Automated-CI-CD-Pipeline.git')
                     }
                     branch('*/main')
                 }
             }
             scriptPath('Jenkins/Jenkinsfile')
+            lightweight(true)
         }
     }
 

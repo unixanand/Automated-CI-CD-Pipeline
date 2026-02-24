@@ -132,8 +132,6 @@ resource "aws_instance" "jenkins_server" {
               # Append local secret from Terraform
               echo "${data.local_file.docker_secret.content}" >> /etc/environment
               
-              # Continue with your existing jenkins-install.sh commands
-              ${file("jenkins-install.sh")}
               EOF
 
   tags = {

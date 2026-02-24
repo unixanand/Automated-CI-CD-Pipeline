@@ -1,0 +1,298 @@
+- name: Full DevOps Stack — Docker + k3s + Jenkins (containerized + auto-configured)
+  hosts: devops
+  become: yes
+
+  vars:
+    jenkins_container: jenkins
+    jenkins_home: /var/jenkins_home
+    kubeconfig_host: /home/ubuntu/.kube
+    jenkins_image_dir: /home/ubuntu/jenkins-docker
+
+    github_repo_owner: unixanand
+    github_repo_name: Automated-CI-CD-Pipeline
+    github_token: "{{ lookup('env', 'GITHUB_TOKEN') | default('', true) }}"
+    docker_hub_user: "{{ lookup('env', 'DOCKERHUB_USER') | default('', true) }}"
+    docker_hub_password: "{{ lookup('env', 'DOCKERHUB_PASS') | default('', true) }}"
+    ec2_public_ip: "{{ ansible_host }}"
+    jenkins_url: "http://{{ ansible_host }}:8080"
+
+  tasks:
+
+  # -------------------------------------------------
+  # 1. Base system setup
+  # -------------------------------------------------
+
+  - name: Install base packages
+    apt:
+      name:
+        - curl
+        - ca-certificates
+        - gnupg
+        - git
+        - unzip
+        - lsb-release
+        - docker.io
+      state: present
+      update_cache: yes
+
+  - name: Start Docker
+    service:
+      name: docker
+      state: started
+      enabled: yes
+
+  - name: Add ubuntu to docker group
+    user:
+      name: ubuntu
+      groups: docker
+      append: yes
+
+  # -------------------------------------------------
+  # 2. Install k3s Kubernetes
+  # -------------------------------------------------
+
+  - name: Download k3s install script
+    get_url:
+      url: https://get.k3s.io
+      dest: /tmp/k3s_install.sh
+      mode: '0755'
+
+  - name: Install k3s
+    shell: /tmp/k3s_install.sh --write-kubeconfig-mode 644
+    args:
+      creates: /usr/local/bin/kubectl
+
+  - name: Wait for k3s ready
+    shell: kubectl get node
+    register: k3s_ready
+    retries: 10
+    delay: 10
+    until: k3s_ready.rc == 0
+
+  # -------------------------------------------------
+  # 3. Prepare kubeconfig for Jenkins
+  # -------------------------------------------------
+
+  - name: Ensure kube directory exists
+    file:
+      path: "{{ kubeconfig_host }}"
+      state: directory
+      owner: ubuntu
+      group: ubuntu
+
+  - name: Copy kubeconfig
+    copy:
+      src: /etc/rancher/k3s/k3s.yaml
+      dest: "{{ kubeconfig_host }}/config"
+      remote_src: yes
+      owner: ubuntu
+      group: ubuntu
+
+  - name: Get private IP
+    shell: hostname -I | awk '{print $1}'
+    register: private_ip
+
+  - name: Replace localhost in kubeconfig
+    replace:
+      path: "{{ kubeconfig_host }}/config"
+      regexp: '127.0.0.1'
+      replace: "{{ private_ip.stdout }}"
+
+  # -------------------------------------------------
+  # 4. Build Jenkins image
+  # -------------------------------------------------
+
+  - name: Ensure Jenkins build directory exists
+    file:
+      path: "{{ jenkins_image_dir }}"
+      state: directory
+
+  - name: Create Jenkins Dockerfile
+    copy:
+      dest: "{{ jenkins_image_dir }}/Dockerfile"
+      content: |
+        FROM jenkins/jenkins:lts
+        USER root
+
+        RUN apt-get update && apt-get install -y \
+            ca-certificates curl gnupg lsb-release
+
+        RUN mkdir -p /etc/apt/keyrings \
+         && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+         && echo \
+         "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
+         $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+         > /etc/apt/sources.list.d/docker.list
+
+        RUN apt-get update && apt-get install -y docker-ce-cli
+
+        RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+         && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl \
+         && rm kubectl
+
+        USER jenkins
+
+  - name: Build Jenkins image
+    community.docker.docker_image:
+      name: jenkins-docker
+      build:
+        path: "{{ jenkins_image_dir }}"
+      source: build
+
+  # -------------------------------------------------
+  # 5. Prepare Jenkins home
+  # -------------------------------------------------
+
+  - name: Create Jenkins home
+    file:
+      path: "{{ jenkins_home }}"
+      state: directory
+      owner: 1000
+      group: 1000
+
+  - name: Create init.groovy.d
+    file:
+      path: "{{ jenkins_home }}/init.groovy.d"
+      state: directory
+      owner: 1000
+      group: 1000
+
+  - name: Disable setup wizard
+    copy:
+      dest: "{{ jenkins_home }}/init.groovy.d/disableWizard.groovy"
+      owner: 1000
+      group: 1000
+      content: |
+        import jenkins.model.*
+        Jenkins.instance.setInstallState(
+          jenkins.install.InstallState.INITIAL_SETUP_COMPLETED
+        )
+
+  - name: Configure Jenkins URL
+    copy:
+      dest: "{{ jenkins_home }}/jenkins.model.JenkinsLocationConfiguration.xml"
+      owner: 1000
+      group: 1000
+      content: |
+        <?xml version='1.1' encoding='UTF-8'?>
+        <jenkins.model.JenkinsLocationConfiguration>
+          <adminAddress>admin@example.com</adminAddress>
+          <jenkinsUrl>http://{{ ec2_public_ip }}:8080/</jenkinsUrl>
+        </jenkins.model.JenkinsLocationConfiguration>
+
+  # -------------------------------------------------
+  # 6. Run Jenkins container
+  # -------------------------------------------------
+
+  - name: Run Jenkins container
+    community.docker.docker_container:
+      name: "{{ jenkins_container }}"
+      image: jenkins-docker
+      state: started
+      recreate: yes
+      restart_policy: always
+      privileged: yes
+      ports:
+        - "8080:8080"
+        - "50000:50000"
+      env:
+        CASC_JENKINS_CONFIG: /var/jenkins_home/casc_configs
+        JAVA_OPTS: -Djenkins.install.runSetupWizard=false
+        KUBECONFIG: /var/jenkins_home/.kube/config
+        JENKINS_URL: "{{ jenkins_url }}"
+        DOCKERHUB_USER: "{{docker_hub_user}}"
+        DOCKERHUB_PASS: "{{docker_hub_password}}"
+      volumes:
+        - "{{ jenkins_home }}:/var/jenkins_home"
+        - "/var/run/docker.sock:/var/run/docker.sock"
+        - "{{ kubeconfig_host }}:/var/jenkins_home/.kube"
+        - "/etc/environment:/etc/environment:ro"
+
+  # -------------------------------------------------
+  # 7. Wait Jenkins ready
+  # -------------------------------------------------
+
+  - name: Wait for Jenkins
+    uri:
+      url: http://localhost:8080/login
+      status_code: 200
+    register: result
+    retries: 30
+    delay: 10
+    until: result.status == 200
+
+  # -------------------------------------------------
+  # 8. Install plugins
+  # -------------------------------------------------
+
+  - name: Copy plugins list
+    copy:
+      src: files/plugins.txt
+      dest: /tmp/plugins.txt
+
+  - name: Copy plugins into container
+    command: docker cp /tmp/plugins.txt {{ jenkins_container }}:/tmp/plugins.txt
+
+  - name: Install plugins
+    command: >
+      docker exec {{ jenkins_container }}
+      jenkins-plugin-cli --plugin-file /tmp/plugins.txt
+
+  # -------------------------------------------------
+  # 9. Apply JCasC + Job DSL
+  # -------------------------------------------------
+
+  - name: Create JCasC directory
+    file:
+      path: "{{ jenkins_home }}/casc_configs"
+      state: directory
+      owner: 1000
+      group: 1000
+
+  - name: Copy JCasC config
+    copy:
+      src: files/jenkins.yaml
+      dest: "{{ jenkins_home }}/casc_configs/jenkins.yaml"
+      owner: 1000
+      group: 1000
+
+  - name: Copy Job DSL
+    copy:
+      src: files/job.groovy
+      dest: "{{ jenkins_home }}/job.groovy"
+      owner: 1000
+      group: 1000
+
+  - name: Restart Jenkins container
+    command: docker restart {{ jenkins_container }}
+
+  - name: Wait Jenkins after restart
+    uri:
+      url: http://localhost:8080/login
+      status_code: 200
+    register: result
+    retries: 30
+    delay: 10
+    until: result.status == 200
+
+  # -------------------------------------------------
+  # 10. Create GitHub webhook
+  # -------------------------------------------------
+
+  - name: Create GitHub webhook
+    uri:
+      url: "https://api.github.com/repos/{{ github_repo_owner }}/{{ github_repo_name }}/hooks"
+      method: POST
+      headers:
+        Authorization: "token {{ github_token }}"
+        Accept: "application/vnd.github+json"
+      body_format: json
+      body:
+        name: web
+        active: true
+        events: [push]
+        config:
+          url: "http://{{ ec2_public_ip }}:8080/github-webhook/"
+          content_type: json
+      status_code: [201, 422]
+    when: github_token != ""

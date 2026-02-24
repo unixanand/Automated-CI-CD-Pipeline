@@ -37,4 +37,4 @@ credentials:
               description: Docker Hub login
 
 jobs:
-  - file: /var/lib/jenkins/job.groovy
+  - file: /var/jenkins_home/job.groovy

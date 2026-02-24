@@ -279,8 +279,8 @@
   # 10. Read GITHUB token from environment file
   # -------------------------------------------------
 
-  - name: Read GitHub token from /opt/environment
-    shell: grep '^GITHUB_TOKEN=' /opt/environment | cut -d '=' -f2
+  - name: Read GitHub token from /etc/environment
+    shell: grep '^GITHUB_TOKEN=' /etc/environment | cut -d '=' -f2
     register: github_token_file
     changed_when: false
   

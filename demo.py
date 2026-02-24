@@ -72,7 +72,7 @@ elif menu == "About":
 This application demonstrates a **fully automated CI/CD pipeline**:
 
 - Source Code → GitHub  
-- Build → Jenkins Pipeline  
+- Build → Jenkins Pipeline - JCasC & DSL  
 - Container → Docker  
 - Deployment → Kubernetes (K3s)  
 

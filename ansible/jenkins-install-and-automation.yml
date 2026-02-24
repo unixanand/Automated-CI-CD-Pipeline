@@ -307,8 +307,10 @@
         config:
           url: "http://{{ ec2_public_ip }}:8080/github-webhook/"
           content_type: json
-      status_code: [201, 422]
+          return_content: yes
+    register: webhook_result
     when: github_token != ""
-
-  - debug:
-    var: webhook_result
+  
+  - name: Show webhook response
+    debug:
+      var: webhook_result

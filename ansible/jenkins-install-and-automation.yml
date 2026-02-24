@@ -306,8 +306,8 @@
         events: [push]
         config:
           url: "http://{{ ec2_public_ip }}:8080/github-webhook/"
-          content_type: json
-          return_content: yes
+      content_type: json
+      return_content: yes
     register: webhook_result
     when: github_token != ""
   

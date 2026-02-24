@@ -309,3 +309,6 @@
           content_type: json
       status_code: [201, 422]
     when: github_token != ""
+
+  - debug:
+    var: webhook_result

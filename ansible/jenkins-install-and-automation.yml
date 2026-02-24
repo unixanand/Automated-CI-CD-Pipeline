@@ -276,7 +276,20 @@
     until: result.status == 200
 
   # -------------------------------------------------
-  # 10. Create GitHub webhook
+  # 10. Read GITHUB token from environment file
+  # -------------------------------------------------
+
+  - name: Read GitHub token from /opt/environment
+    shell: grep '^GITHUB_TOKEN=' /opt/environment | cut -d '=' -f2
+    register: github_token_file
+    changed_when: false
+  
+  - name: Set github_token variable
+    set_fact:
+      github_token: "{{ github_token_file.stdout }}"
+
+  # -------------------------------------------------
+  # 11. Create GitHub webhook
   # -------------------------------------------------
 
   - name: Create GitHub webhook

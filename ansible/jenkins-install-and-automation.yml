@@ -208,6 +208,13 @@
         - "{{ kubeconfig_host }}:/var/jenkins_home/.kube"
         - "/etc/environment:/etc/environment:ro"
 
+  - name: Add jenkins user to docker group inside container
+    command: docker exec -u root {{ jenkins_container }} usermod -aG docker jenkins
+    changed_when: false
+
+  - name: Restart Jenkins container after docker permission change
+    command: docker restart {{ jenkins_container }}
+
   # -------------------------------------------------
   # 7. Wait Jenkins ready
   # -------------------------------------------------

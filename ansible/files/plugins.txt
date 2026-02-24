@@ -7,7 +7,7 @@ credentials-binding
 docker-workflow
 aws-credentials
 job-dsl
-Kubernetes
+kubernetes
 plain-credentials
 ssh-credentials
 pipeline-stage-view

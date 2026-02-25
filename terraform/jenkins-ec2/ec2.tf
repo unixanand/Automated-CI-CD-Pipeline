@@ -65,10 +65,10 @@ resource "aws_security_group" "k8s_sg" {
   }
 
   ingress {
-    from_port   = 30000
-    to_port     = 32767
+    from_port   = 30001
+    to_port     = 30001
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    security_groups = [aws_security_group.alb_sg.id]
   }
 
   ingress {

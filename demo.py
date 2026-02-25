@@ -19,6 +19,7 @@ menu = st.sidebar.selectbox(
 
 st.sidebar.markdown("---")
 st.sidebar.success("🚀 Deployed via Jenkins CI/CD Pipeline")
+st.sidebar.success("App - Version -1")
 st.sidebar.info("Kubernetes Cluster: K3s")
 
 # -----------------------------

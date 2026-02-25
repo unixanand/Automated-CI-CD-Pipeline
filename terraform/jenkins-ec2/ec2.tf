@@ -116,7 +116,7 @@ resource "aws_security_group" "k8s_sg" {
 # -------------------------
 resource "aws_instance" "jenkins_server" {
   ami                         = data.aws_ami.ubuntu.id
-  instance_type               = "t3.medium"
+  instance_type               = "t2.xlarge"
   key_name                    = "my-amazon-linux-key"
   vpc_security_group_ids      = [aws_security_group.k8s_sg.id]
   associate_public_ip_address = true

@@ -1,6 +1,6 @@
 pipelineJob('restaurant-ci-cd') {
 
-    description('Automated CI/CD pipeline for restaurant application')
+    description('Automated CI/CD pipeline for streamlit application')
 
     properties {
         disableConcurrentBuilds()

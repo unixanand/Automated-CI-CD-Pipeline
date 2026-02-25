@@ -44,7 +44,7 @@ pipeline {
             steps {
                 dir('Automated-CI-CD-Pipeline') {
                     sh '''
-                      kubectl apply -f k8s/streamlit-deployment.yaml
+                      kubectl apply -f K8s/streamlit-deployment.yaml
                       kubectl set image deployment/streamlit-app streamlit=$IMAGE_NAME:$TAG
                       kubectl rollout status deployment/streamlit-app
                     '''

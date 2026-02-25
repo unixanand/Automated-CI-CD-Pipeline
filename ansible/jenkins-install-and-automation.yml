@@ -17,6 +17,24 @@
     jenkins_url: "http://{{ ansible_host }}:8080"
 
   tasks:
+  # -------------------------------------------------
+  # 0. Read secrets from /etc/environment
+  # -------------------------------------------------
+
+  - name: Read DockerHub user from /etc/environment
+    shell: grep '^DOCKERHUB_USER=' /etc/environment | cut -d '=' -f2
+    register: dockerhub_user_file
+    changed_when: false
+
+  - name: Read DockerHub password from /etc/environment
+    shell: grep '^DOCKERHUB_PASS=' /etc/environment | cut -d '=' -f2
+    register: dockerhub_pass_file
+    changed_when: false
+
+  - name: Set DockerHub facts
+    set_fact:
+      docker_hub_user: "{{ dockerhub_user_file.stdout }}"
+      docker_hub_password: "{{ dockerhub_pass_file.stdout }}"
 
   # -------------------------------------------------
   # 1. Base system setup

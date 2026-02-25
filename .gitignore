@@ -3,4 +3,4 @@ terraform/jenkins-ec2/terraform.tfstate.backup
 terraform/jenkins-ec2/.terraform/
 terraform/jenkins-ec2/secret
 terraform/jenkins-ec2/.terraform.lock.hcl
-tmp
+

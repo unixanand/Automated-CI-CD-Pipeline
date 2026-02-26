@@ -1,8 +1,8 @@
 resource "aws_lb_target_group" "streamlit_tg" {
-  name     = "streamlit-tg"
+  name     = "streamlit-app-tg"
   port     = 30001
   protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
+  vpc_id   = data.aws_vpc.default.id
 
   health_check {
     path                = "/_stcore/health"
